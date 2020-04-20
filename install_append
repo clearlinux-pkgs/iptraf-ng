@@ -1,0 +1,2 @@
+ln -s iptraf-ng %{buildroot}/usr/bin/iptraf
+ln -s rvnamed-ng %{buildroot}/usr/bin/rvnamed
