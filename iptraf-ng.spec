@@ -4,7 +4,7 @@
 #
 Name     : iptraf-ng
 Version  : 1.1.4
-Release  : 1
+Release  : 2
 URL      : https://github.com/iptraf-ng/iptraf-ng/archive/v1.1.4/iptraf-ng-1.1.4.tar.gz
 Source0  : https://github.com/iptraf-ng/iptraf-ng/archive/v1.1.4/iptraf-ng-1.1.4.tar.gz
 Summary  : No detailed summary available
@@ -17,6 +17,7 @@ BuildRequires : pkgconfig(ncurses)
 Patch1: 0001-BUGFIX-fix-Floating-point-exception-in-tcplog_flowra.patch
 Patch2: 0002-Makefile-add-Werror-format-security.patch
 Patch3: 0003-bugfix-positionptr-properly-allocate-newly-created-i.patch
+Patch4: 0004-build-use-wide-version-of-lpanel-when-needed.patch
 
 %description
 ==========================================================================
@@ -56,13 +57,14 @@ cd %{_builddir}/iptraf-ng-1.1.4
 %patch1 -p1
 %patch2 -p1
 %patch3 -p1
+%patch4 -p1
 
 %build
 export http_proxy=http://127.0.0.1:9/
 export https_proxy=http://127.0.0.1:9/
 export no_proxy=localhost,127.0.0.1,0.0.0.0
 export LANG=C.UTF-8
-export SOURCE_DATE_EPOCH=1587408995
+export SOURCE_DATE_EPOCH=1587411961
 export GCC_IGNORE_WERROR=1
 export AR=gcc-ar
 export RANLIB=gcc-ranlib
@@ -75,7 +77,7 @@ make  %{?_smp_mflags}  prefix=/usr sbindir_relative=bin
 
 
 %install
-export SOURCE_DATE_EPOCH=1587408995
+export SOURCE_DATE_EPOCH=1587411961
 rm -rf %{buildroot}
 mkdir -p %{buildroot}/usr/share/package-licenses/iptraf-ng
 cp %{_builddir}/iptraf-ng-1.1.4/LICENSE %{buildroot}/usr/share/package-licenses/iptraf-ng/cad7b705cfaf125ec02188d8b8a12f1f038c4dd8

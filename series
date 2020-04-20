@@ -1,3 +1,4 @@
 0001-BUGFIX-fix-Floating-point-exception-in-tcplog_flowra.patch
 0002-Makefile-add-Werror-format-security.patch
 0003-bugfix-positionptr-properly-allocate-newly-created-i.patch
+0004-build-use-wide-version-of-lpanel-when-needed.patch
