@@ -1,0 +1,31 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Vitezslav Samel <vitezslav@samel.cz>
+Date: Thu, 11 Jun 2020 09:32:55 +0200
+Subject: [PATCH] Makefile: protect mandatory compile flags in CFLAGS
+
+Many users are used to define their own CFLAGS on make cmdline. But this
+would hide our mandatory CFLAGS entries; fix this by putting mandatory
+compile flags into IPTRAF_CFLAGS variable.
+
+Signed-off-by: Vitezslav Samel <vitezslav@samel.cz>
+---
+ Makefile | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index a1fd3d2..a0968af 100644
+--- a/Makefile
++++ b/Makefile
+@@ -18,9 +18,10 @@ VERSION-FILE: FORCE
+ 	@$(SHELL_PATH) ./GEN-VERSION-FILE
+ -include VERSION-FILE
+ 
+-CFLAGS = -g -O2 -Wall -W -std=gnu99 -Werror=format-security -D_GNU_SOURCE
++CFLAGS = -g -O2 -Wall -W -Werror=format-security
+ LDFLAGS =
+-ALL_CFLAGS = $(CPPFLAGS) $(CFLAGS)
++IPTRAF_CFLAGS := -std=gnu99 -D_GNU_SOURCE
++ALL_CFLAGS = $(CPPFLAGS) $(CFLAGS) $(IPTRAF_CFLAGS)
+ ALL_LDFLAGS = $(LDFLAGS)
+ STRIP ?= strip
+ 

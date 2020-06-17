@@ -1,0 +1,245 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Vitezslav Samel <vitezslav@samel.cz>
+Date: Thu, 11 Jun 2020 12:48:51 +0200
+Subject: [PATCH] packet capture: don't reuse socket for multiple receive
+ functions
+
+After we successfuly set up the capturing ring on acquired file
+descriptor we must not reuse this fd to anything else. We must close it
+in case of other error (e.g. mlock() fail) to signal the kernel to free
+the ring structure on the fd.
+
+Signed-off-by: Vitezslav Samel <vitezslav@samel.cz>
+---
+ src/capt-mmap-v2.c  | 16 +++++++++++-----
+ src/capt-mmap-v3.c  | 16 +++++++++++-----
+ src/capt-recvmmsg.c |  3 +++
+ src/capt-recvmsg.c  |  6 +++++-
+ src/capt.c          | 40 +++++++++++++++++++++++++---------------
+ src/capt.h          |  2 ++
+ 6 files changed, 57 insertions(+), 26 deletions(-)
+
+diff --git a/src/capt-mmap-v2.c b/src/capt-mmap-v2.c
+index 19757cb..1cb9e69 100644
+--- a/src/capt-mmap-v2.c
++++ b/src/capt-mmap-v2.c
+@@ -102,14 +102,17 @@ static void capt_cleanup_mmap_v2(struct capt *capt)
+ 
+ int capt_setup_mmap_v2(struct capt *capt)
+ {
++	if (capt_get_socket(capt) == -1)
++		return -1;
++
+ 	int version = TPACKET_V2;
+ 	if (setsockopt(capt->fd, SOL_PACKET, PACKET_VERSION, &version, sizeof(version)) != 0)
+-		return -1;
++		goto err;
+ 
+ 	int hdrlen = version;
+ 	socklen_t socklen = sizeof(hdrlen);
+ 	if (getsockopt(capt->fd, SOL_PACKET, PACKET_HDRLEN, &hdrlen, &socklen) != 0)
+-		return -1;
++		goto err;
+ 
+ 	struct tpacket_req req;
+ 
+@@ -119,16 +122,16 @@ int capt_setup_mmap_v2(struct capt *capt)
+ 	req.tp_block_size = req.tp_frame_nr * req.tp_frame_size;
+ 
+ 	if(setsockopt(capt->fd, SOL_PACKET, PACKET_RX_RING, &req, sizeof(req)) != 0)
+-		return -1;
++		goto err;
+ 
+ 	size_t size = req.tp_block_size * req.tp_block_nr;
+ 	void *map = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, capt->fd, 0);
+ 	if (map == MAP_FAILED)
+-		return -1;
++		goto err;
+ 
+ 	if(mlock(map, size) != 0) {
+ 		munmap(map, size);
+-		return -1;
++		goto err;
+ 	}
+ 
+ 	struct capt_data_mmap_v2 *data = xmallocz(sizeof(struct capt_data_mmap_v2));
+@@ -151,4 +154,7 @@ int capt_setup_mmap_v2(struct capt *capt)
+ 	capt->cleanup		= capt_cleanup_mmap_v2;
+ 
+ 	return 0;	/* All O.K. */
++err:
++	capt_put_socket(capt);
++	return -1;
+ }
+diff --git a/src/capt-mmap-v3.c b/src/capt-mmap-v3.c
+index 6b823af..f6bc5e2 100644
+--- a/src/capt-mmap-v3.c
++++ b/src/capt-mmap-v3.c
+@@ -141,14 +141,17 @@ static void capt_cleanup_mmap_v3(struct capt *capt)
+ 
+ int capt_setup_mmap_v3(struct capt *capt)
+ {
++	if (capt_get_socket(capt) == -1)
++		return -1;
++
+ 	int version = TPACKET_V3;
+ 	if (setsockopt(capt->fd, SOL_PACKET, PACKET_VERSION, &version, sizeof(version)) != 0)
+-		return -1;
++		goto err;
+ 
+ 	int hdrlen = version;
+ 	socklen_t socklen = sizeof(hdrlen);
+ 	if (getsockopt(capt->fd, SOL_PACKET, PACKET_HDRLEN, &hdrlen, &socklen) != 0)
+-		return -1;
++		goto err;
+ 
+ 	struct tpacket_req3 req;
+ 
+@@ -162,16 +165,16 @@ int capt_setup_mmap_v3(struct capt *capt)
+ 	// req.tp_feature_req_word = TP_FT_REQ_FILL_RXHASH;
+ 
+ 	if(setsockopt(capt->fd, SOL_PACKET, PACKET_RX_RING, &req, sizeof(req)) != 0)
+-		return -1;
++		goto err;
+ 
+ 	size_t size = req.tp_block_size * req.tp_block_nr;
+ 	void *map = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, capt->fd, 0);
+ 	if (map == MAP_FAILED)
+-		return -1;
++		goto err;
+ 
+ 	if (mlock(map, size) != 0) {
+ 		munmap(map, size);
+-		return -1;
++		goto err;
+ 	}
+ 
+ 	struct capt_data_mmap_v3 *data = xmallocz(sizeof(struct capt_data_mmap_v3));
+@@ -193,4 +196,7 @@ int capt_setup_mmap_v3(struct capt *capt)
+ 	capt->cleanup		= capt_cleanup_mmap_v3;
+ 
+ 	return 0;	/* All O.K. */
++err:
++	capt_put_socket(capt);
++	return -1;
+ }
+diff --git a/src/capt-recvmmsg.c b/src/capt-recvmmsg.c
+index 712bf0d..dacc5e7 100644
+--- a/src/capt-recvmmsg.c
++++ b/src/capt-recvmmsg.c
+@@ -114,6 +114,9 @@ int capt_setup_recvmmsg(struct capt *capt)
+ {
+ 	struct capt_data_recvmmsg *data;
+ 
++	if (capt_get_socket(capt) == -1)
++		return -1;
++
+ 	data			= xmallocz(sizeof(struct capt_data_recvmmsg));
+ 	data->buf		= xmallocz(FRAMES * MAX_PACKET_SIZE);
+ 	data->msgvec		= xmallocz(FRAMES * sizeof(*data->msgvec));
+diff --git a/src/capt-recvmsg.c b/src/capt-recvmsg.c
+index 4ef7263..e167809 100644
+--- a/src/capt-recvmsg.c
++++ b/src/capt-recvmsg.c
+@@ -64,8 +64,12 @@ static void capt_cleanup_recvmsg(struct capt *capt)
+ 
+ int capt_setup_recvmsg(struct capt *capt)
+ {
+-	struct capt_data_recvmsg *data = xmallocz(sizeof(struct capt_data_recvmsg));
++	struct capt_data_recvmsg *data;
+ 
++	if (capt_get_socket(capt) == -1)
++		return -1;
++
++	data			= xmallocz(sizeof(struct capt_data_recvmsg));
+ 	data->buf		= xmallocz(MAX_PACKET_SIZE);
+ 	data->iov.iov_len	= MAX_PACKET_SIZE;
+ 	data->iov.iov_base	= data->buf;
+diff --git a/src/capt.c b/src/capt.c
+index e14b398..324d7cc 100644
+--- a/src/capt.c
++++ b/src/capt.c
+@@ -15,6 +15,26 @@
+ #include "capt-mmap-v2.h"
+ #include "capt-mmap-v3.h"
+ 
++int capt_get_socket(struct capt *capt) {
++
++	/* initialize socket first with some default protocol;
++	 * the right protocol is then set with bind();
++	 * this overcomes the problem with getting packets
++	 * from other interfaces, because the socket was not
++	 * properly initialized yet */
++	int fd = socket(PF_PACKET, SOCK_RAW, 0);
++	if (fd == -1)
++		return -1;
++
++	capt->fd = fd;
++	return 0;
++}
++
++void capt_put_socket(struct capt *capt) {
++	close(capt->fd);
++	capt->fd = -1;
++}
++
+ static int capt_set_recv_timeout(int fd, unsigned int msec)
+ {
+ 	struct timeval timeout;
+@@ -56,29 +76,20 @@ int capt_init(struct capt *capt, char *ifname)
+ 	capt->put_packet = NULL;
+ 	capt->get_dropped = NULL;
+ 	capt->cleanup = NULL;
++	capt->fd = -1;
+ 
+ 	capt->dropped = 0UL;
+ 
+ 	INIT_LIST_HEAD(&capt->promisc);
+ 
+-	/* initialize socket first with some default protocol;
+-	 * the right protocol is then set with bind();
+-	 * this overcomes the problem with getting packets
+-	 * from other interfaces, because the socket was not
+-	 * properly initialized yet */
+-	int fd = socket(PF_PACKET, SOCK_RAW, 0);
+-	if (fd == -1)
+-		return fd;
+-	capt->fd = fd;
++	/* try all available receive functions */
++	if (capt_setup_receive_function(capt) == -1)
++		goto out;
+ 
+ 	/* set socket receive timeout */
+ 	if (capt_set_recv_timeout(capt->fd, 250) == -1)
+ 		goto out;
+ 
+-	/* try all available receive functions */
+-	if (capt_setup_receive_function(capt) == -1)
+-		goto out;
+-
+ 	if (options.promisc)
+ 		promisc_enable(capt->fd, &capt->promisc, ifname);
+ 
+@@ -102,8 +113,7 @@ void capt_destroy(struct capt *capt)
+ 	if (capt->cleanup)
+ 		capt->cleanup(capt);
+ 
+-	close(capt->fd);
+-	capt->fd = -1;
++	capt_put_socket(capt);
+ }
+ 
+ static unsigned long capt_get_dropped_generic(struct capt *capt)
+diff --git a/src/capt.h b/src/capt.h
+index d1399b5..a36a4aa 100644
+--- a/src/capt.h
++++ b/src/capt.h
+@@ -27,6 +27,8 @@ struct capt {
+ 	void		(*cleanup)(struct capt *capt);
+ };
+ 
++int capt_get_socket(struct capt *capt);
++void capt_put_socket(struct capt *capt);
+ int capt_init(struct capt *capt, char *ifname);
+ void capt_destroy(struct capt *capt);
+ unsigned long capt_get_dropped(struct capt *capt);

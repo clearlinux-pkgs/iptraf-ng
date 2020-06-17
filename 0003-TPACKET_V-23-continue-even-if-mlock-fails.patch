@@ -1,0 +1,64 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Vitezslav Samel <vitezslav@samel.cz>
+Date: Thu, 11 Jun 2020 13:21:02 +0200
+Subject: [PATCH] TPACKET_V[23]: continue even if mlock() fails
+
+If mlock() fails don't bail out just only continue.
+
+mlock()ing the mmap()ed memory is not strictly necessary. It it fails we
+can continue without problems albeit suboptimally. This can occur e.g.
+when running in systemd-nspawn container.
+
+Signed-off-by: Vitezslav Samel <vitezslav@samel.cz>
+---
+ src/capt-mmap-v2.c | 10 +++++-----
+ src/capt-mmap-v3.c |  8 ++++----
+ 2 files changed, 9 insertions(+), 9 deletions(-)
+
+diff --git a/src/capt-mmap-v2.c b/src/capt-mmap-v2.c
+index 1cb9e69..f69b189 100644
+--- a/src/capt-mmap-v2.c
++++ b/src/capt-mmap-v2.c
+@@ -121,7 +121,7 @@ int capt_setup_mmap_v2(struct capt *capt)
+ 	req.tp_frame_size = FRAME_SIZE;
+ 	req.tp_block_size = req.tp_frame_nr * req.tp_frame_size;
+ 
+-	if(setsockopt(capt->fd, SOL_PACKET, PACKET_RX_RING, &req, sizeof(req)) != 0)
++	if (setsockopt(capt->fd, SOL_PACKET, PACKET_RX_RING, &req, sizeof(req)) != 0)
+ 		goto err;
+ 
+ 	size_t size = req.tp_block_size * req.tp_block_nr;
+@@ -129,10 +129,10 @@ int capt_setup_mmap_v2(struct capt *capt)
+ 	if (map == MAP_FAILED)
+ 		goto err;
+ 
+-	if(mlock(map, size) != 0) {
+-		munmap(map, size);
+-		goto err;
+-	}
++	/* try to lock this memory to RAM */
++	(void)mlock(map, size);	/* no need to check return value because the mlock() is
++				 * not mandatory; if it fails packet capture just works OK
++				 * albeit suboptimally */
+ 
+ 	struct capt_data_mmap_v2 *data = xmallocz(sizeof(struct capt_data_mmap_v2));
+ 
+diff --git a/src/capt-mmap-v3.c b/src/capt-mmap-v3.c
+index f6bc5e2..539b923 100644
+--- a/src/capt-mmap-v3.c
++++ b/src/capt-mmap-v3.c
+@@ -172,10 +172,10 @@ int capt_setup_mmap_v3(struct capt *capt)
+ 	if (map == MAP_FAILED)
+ 		goto err;
+ 
+-	if (mlock(map, size) != 0) {
+-		munmap(map, size);
+-		goto err;
+-	}
++	/* try to lock this memory to RAM */
++	(void)mlock(map, size);	/* no need to check return value because the mlock() is
++				 * not mandatory; if it fails packet capture just works OK
++				 * albeit suboptimally */
+ 
+ 	struct capt_data_mmap_v3 *data = xmallocz(sizeof(struct capt_data_mmap_v3));
+ 
