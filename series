@@ -1,3 +1,3 @@
-0001-Makefile-protect-mandatory-compile-flags-in-CFLAGS.patch
-0002-packet-capture-don-t-reuse-socket-for-multiple-recei.patch
-0003-TPACKET_V-23-continue-even-if-mlock-fails.patch
+#0001-Makefile-protect-mandatory-compile-flags-in-CFLAGS.patch
+#0002-packet-capture-don-t-reuse-socket-for-multiple-recei.patch
+#0003-TPACKET_V-23-continue-even-if-mlock-fails.patch
